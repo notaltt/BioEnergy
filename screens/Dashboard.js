@@ -4,6 +4,63 @@ import { StyleSheet, View } from "react-native";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import { firestore as db } from "../firebase";
 import { getDoc, doc, onSnapshot } from "firebase/firestore";
+import * as Notifications from 'expo-notifications';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+
+const BACKGROUND_FETCH_TASK = 'background-fetch-task';
+
+TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
+    try {
+      const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+      const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const methaneValue = data.methane;
+          const pressureValue = data.pressure;
+  
+          if (pressureValue >= 5000) {
+            sendNotification();
+          }
+  
+          if (methaneValue >= 199) {
+            sendNotification2();
+          }
+  
+          console.log('Methane:', methaneValue);
+          console.log('Storage:', pressureValue);
+
+        } else {
+          console.log('Document does not exist!');
+        }
+      });
+  
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error fetching document:', error);
+      return BackgroundFetch.Result.Failed;
+    }
+  });
+
+  const sendNotification = async () => {
+    await Notifications.scheduleNotificationAsync({
+        content: {
+            title: 'Storage Level Alert',
+            body: 'The storage level has reached 5000.',
+        },
+        trigger: null, 
+    });
+};
+
+const sendNotification2 = async () => {
+    await Notifications.scheduleNotificationAsync({
+        content: {
+            title: 'Methane Emission Level Alert',
+            body: 'The methane emission reached 199',
+        },
+        trigger: null, 
+    });
+};
 
 export default function Dashboard() {
     const [emissionLevel, setEmissionLevel] = useState(0);
@@ -11,47 +68,60 @@ export default function Dashboard() {
     const [data1, setData1] = useState(generateInitialData());
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-                const unsubscribe = onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        const methaneValue = data.methane;
-                        const pressureValue = data.pressure;
-                        const historyArray = data.history;
-                    
-                        setEmissionLevel(methaneValue);
-                        setStorageLevel(pressureValue);
-                        setData1(fetchEmissionData(methaneValue))
-                    
-                        const formattedHistory = historyArray.map(item => ({
-                            ...item,
-                            date: new Date(item.date.seconds * 1000).toLocaleString(), 
-                        }));
-                        
-                        console.log('Methane:', methaneValue);
-                        console.log('Storage:', pressureValue);
-                        console.log('History:', formattedHistory);
-                    } else {
-                        console.log('Document does not exist!');
-                    }
-                });
-
-                return unsubscribe;
-            } catch (error) {
-                console.error('Error fetching document:', error);
-            }
-        };
-
-        const fetchDataInterval = setInterval(() => {
-            fetchData();
-        }, 60000); 
-
+        registerBackgroundFetch();
         fetchData();
-
-        return () => clearInterval(fetchDataInterval);
+        const interval = setInterval(fetchData, 60000); 
+        return () => clearInterval(interval);
     }, []);
+
+    const registerBackgroundFetch = async () => {
+        try {
+            await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+            minimumInterval: 60, 
+            stopOnTerminate: false, 
+            startOnBoot: true,
+            });
+        } catch (error) {
+            console.error('Failed to register background fetch task:', error);
+        }
+    };
+
+    const fetchData = async () => {
+        try {
+            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+            const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const methaneValue = data.methane;
+                    const pressureValue = data.pressure;
+
+                    setEmissionLevel(methaneValue);
+                    setStorageLevel(pressureValue);
+                    setData1(fetchEmissionData(methaneValue));
+
+                    if (pressureValue >= 5000) {
+                        sendNotification('Storage Level Alert', 'The storage level has reached 5000.');
+                    }
+
+                    if (methaneValue >= 199) {
+                        sendNotification('Methane Emission Level Alert', 'The methane emission reached 199');
+                    }
+
+
+                    console.log('Methane:', methaneValue);
+                    console.log('Storage:', pressureValue);
+                } else {
+                    console.log('Document does not exist!');
+                }
+            });
+            
+            // Return unsubscribe function to cleanup listener
+            return unsubscribe;
+        } catch (error) {
+            console.error('Error fetching document:', error);
+        }
+    }
+    
 
     function generateInitialData() {
       const labels = Array.from({ length: 7 }, (_, i) => {
@@ -117,6 +187,26 @@ export default function Dashboard() {
         strokeWidth: 2,
         barPercentage: 0.5,
         useShadowColorFromDataset: false,
+    };
+
+    const sendNotification = async () => {
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: 'Storage Level Alert',
+                body: 'The storage level has reached 5000.',
+            },
+            trigger: null,
+        });
+    };
+
+    const sendNotification2 = async () => {
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: 'Methane Emission Level Alert',
+                body: 'The methane emission reached 199',
+            },
+            trigger: null,
+        });
     };
 
     return (
