@@ -9,7 +9,6 @@ export default function Dashboard() {
     const [emissionLevel, setEmissionLevel] = useState(0);
     const [storageLevel, setStorageLevel] = useState(0);
     const [data1, setData1] = useState(generateInitialData());
-    let initialValue = [0, 0, 0, 0, 0, 0, 0]
 
     useEffect(() => {
         const fetchData = async () => {
@@ -49,7 +48,6 @@ export default function Dashboard() {
             fetchData();
         }, 60000); 
 
-        // Fetch data initially
         fetchData();
 
         return () => clearInterval(fetchDataInterval);
@@ -62,7 +60,7 @@ export default function Dashboard() {
           return `${date.getHours()}:${date.getMinutes()}`;
       });
   
-      const initialData = [0, 0, 0, 0, 0, 0, 0]; // Initial data with zeros
+      const initialData = [0, 0, 0, 0, 0, 0, 0]; 
   
       return {
           labels,
@@ -123,8 +121,7 @@ export default function Dashboard() {
 
     return (
         <View style={styles.container}>
-            <Text>Current Methane Emission Level</Text>
-            <Text>{emissionLevel}</Text>
+            <Text>Current Methane Emission Level: {emissionLevel}</Text>
             <LineChart
                 data={data1}
                 width={350}
@@ -132,7 +129,7 @@ export default function Dashboard() {
                 chartConfig={chartConfig}
                 style={styles.chart}
             />
-            <Text>{storageLevel}</Text>
+            <Text>Current Storage: {storageLevel}</Text>
             <PieChart
                 data={data2}
                 width={350}
