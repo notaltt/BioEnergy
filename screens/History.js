@@ -16,8 +16,8 @@ export default function History() {
                         const historyArray = data.history;
 
                         const formattedHistory = historyArray.map(item => ({
-                            date: new Date(item.date.seconds * 1000).toLocaleString(), 
-                            value: item.value, // Assuming 'value' is the key in your history data object
+                            date: item.date,
+                            value: item.value,
                         }));
 
                         setHistoryData(formattedHistory);

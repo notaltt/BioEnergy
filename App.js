@@ -13,7 +13,7 @@ function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
-      <Stack.Screen name="Permission" component={Permission} />
+        <Stack.Screen name="Permission" component={Permission} />
         <Stack.Screen 
           name="Dashboard" 
           component={Dashboard} 
@@ -21,6 +21,7 @@ function App() {
             headerRight: () => (
               <CustomIconButton onPress={() => navigation.navigate('History')} />
             ),
+            headerBackVisible: false
           })}
         />
         <Stack.Screen name="History" component={History} />

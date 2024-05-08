@@ -10,10 +10,8 @@ const CustomIconButton = ({ onPress }) => {
   `;
 
   return (
-    <TouchableOpacity onPress={onPress}>
-      <View style={styles.container}>
-        <SvgXml xml={svgIcon} />
-      </View>
+    <TouchableOpacity onPress={onPress} style={styles.container}>
+      <SvgXml xml={svgIcon} />
     </TouchableOpacity>
   );
 };
@@ -21,7 +19,8 @@ const CustomIconButton = ({ onPress }) => {
 const styles = StyleSheet.create({
   container: {
     padding: 10,
-    backgroundColor: 'black'
+    backgroundColor: 'black',
+    borderRadius: 10, // Add borderRadius to make it visible
   },
 });
 
