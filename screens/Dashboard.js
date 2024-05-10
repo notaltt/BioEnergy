@@ -32,8 +32,8 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
                 console.log('background Methane:', methaneValue);
                 console.log('background Storage:', pressureValue);
 
-                const currentDate = new Date().toISOString();
-                addToHistory(currentDate, methaneValue);
+                // const currentDate = new Date().toISOString();
+                // addToHistory(currentDate, methaneValue);
             } else {
                 console.log('Document does not exist!');
             }
@@ -126,14 +126,27 @@ export default function Dashboard() {
         // });
 
         setRealValue(() => {
-            const realValue = Math.max(0, 41 - storageLevel);
+            const realValue = Math.max(0, 33.78 - storageLevel);
             return realValue;
+        });
+
+        const pressureUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                const pressureValue = data.pressure;
+                setStorageLevel(pressureValue); // Update pressure value on Firestore changes
+            } else {
+                console.log('Document does not exist!');
+            }
         });
     
         fetchData();
         registerBackgroundFetch();
         const interval = setInterval(fetchData, 15000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            pressureUnsubscribe();
+        };
     }, [storageLevel]);
 
     const registerBackgroundFetch = async () => {
@@ -167,14 +180,12 @@ export default function Dashboard() {
                 // const newStorageThreshold = maxCapacity - pressureValue;
                 // setStorageThreshold(newStorageThreshold >= 0 ? newStorageThreshold : 0);
     
-                if (pressureValue == 3) {
+                if (pressureValue <= 3) {
                     sendNotification("The storage has reached its critical value.");
-                }
-    
-                if (pressureValue == 5) {
+                } else if (5 >= pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
-                    setStorageThreshold(0); // Set storageThreshold to 0 to fill the pie chart completely
-                }
+                }  setStorageThreshold(0); // Set storageThreshold to 0 to fill the pie chart completely
+        
                 
                 if (methaneValue >= 100) {
                     sendNotification2();
@@ -245,7 +256,7 @@ export default function Dashboard() {
         },
         {
             name: "CAPACITY",
-            population: 40 - realValue,
+            population: 33.78 - realValue,
             color: "#E45353",
             legendFontColor: "rgba(16, 39, 90, 1)",
             legendFontSize: 15
