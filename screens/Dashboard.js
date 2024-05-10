@@ -19,9 +19,9 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
                 const methaneValue = data.methane;
                 const pressureValue = data.pressure;
 
-                if (pressureValue == 3) {
+                if (pressureValue <= 3) {
                     sendNotification("The storage has reached its critical value.");
-                } else if (pressureValue == 5) {
+                } else if (5 >= pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
                 }
 
@@ -116,18 +116,24 @@ export default function Dashboard() {
     const [emissionLevel, setEmissionLevel] = useState(0);
     const [storageLevel, setStorageLevel] = useState(0);
     const [storageThreshold, setStorageThreshold] = useState(0)
+    const [realValue, setRealValue] = useState(0)
     const [data1, setData1] = useState(generateInitialData());
 
     useEffect(() => {
-        setStorageThreshold(() => {
-            const threshold = 1000 - storageLevel;
-            return threshold >= 0 ? threshold : 0;
-        });
+        // setStorageThreshold(() => {
+        //     const threshold = 40 - realValue;
+        //     return threshold >= 0 ? threshold : 0;
+        // });
 
+        setRealValue(() => {
+            const realValue = Math.max(0, 41 - storageLevel);
+            return realValue;
+        });
+    
         fetchData();
         registerBackgroundFetch();
-        const interval = setInterval(fetchData, 5000); 
-        return () => clearInterval(interval); 
+        const interval = setInterval(fetchData, 15000);
+        return () => clearInterval(interval);
     }, [storageLevel]);
 
     const registerBackgroundFetch = async () => {
@@ -232,14 +238,14 @@ export default function Dashboard() {
     const data2 = [
         {
             name: "AMOUNT OF GAS",
-            population: storageLevel,
+            population: realValue,
             color: "#3B64B4",
             legendFontColor: "rgba(16, 39, 90, 1)",
             legendFontSize: 15
         },
         {
             name: "CAPACITY",
-            population: storageThreshold,
+            population: 40 - realValue,
             color: "#E45353",
             legendFontColor: "rgba(16, 39, 90, 1)",
             legendFontSize: 15
@@ -281,7 +287,7 @@ export default function Dashboard() {
                     style={styles.chart}
                 />
             </View>
-            <Text style={styles.text}>Current Storage: {storageLevel}</Text>
+            <Text style={styles.text}>Storage Level: {storageLevel}</Text>
             <PieChart
                 data={data2}
                 width={350}
