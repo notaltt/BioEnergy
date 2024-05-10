@@ -12,43 +12,46 @@ const BACKGROUND_FETCH_TASK = 'background-fetch-task';
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
-      const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-      const unsubscribe = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const methaneValue = data.methane;
-          const pressureValue = data.pressure;
-  
-        if (pressureValue >= 250) {
-            sendNotification();
-        }
+        const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const methaneValue = data.methane;
+                const pressureValue = data.pressure;
 
-        if (methaneValue >= 100) {
-            sendNotification2();
-        }
-  
-          console.log('background Methane:', methaneValue);
-          console.log('background Storage:', pressureValue);
+                if (pressureValue == 3) {
+                    sendNotification("The storage has reached its critical value.");
+                } else if (pressureValue == 5) {
+                    sendNotification("The storage has reached its maximum storage.");
+                }
 
-          const currentDate = new Date().toISOString();
-          addToHistory(currentDate, methaneValue);
-        } else {
-          console.log('Document does not exist!');
-        }
-      });
-  
-      return unsubscribe;
+                // if (methaneValue >= 100) {
+                //     sendNotification2();
+                // }
+
+                console.log('background Methane:', methaneValue);
+                console.log('background Storage:', pressureValue);
+
+                const currentDate = new Date().toISOString();
+                addToHistory(currentDate, methaneValue);
+            } else {
+                console.log('Document does not exist!');
+            }
+        });
+
+        return unsubscribe;
     } catch (error) {
-      console.error('Error fetching document:', error);
-      return BackgroundFetch.Result.Failed;
+        console.error('Error fetching document:', error);
+        return BackgroundFetch.Result.Failed;
     }
-  });
+});
 
-  const sendNotification = async () => {
+
+  const sendNotification = async (message) => {
     await Notifications.scheduleNotificationAsync({
         content: {
             title: 'Storage Level Alert',
-            body: 'The storage level has reached 250.',
+            body: message,
         },
         trigger: null, 
     });
@@ -117,20 +120,20 @@ export default function Dashboard() {
 
     useEffect(() => {
         setStorageThreshold(() => {
-            const threshold = 250 - storageLevel;
+            const threshold = 1000 - storageLevel;
             return threshold >= 0 ? threshold : 0;
         });
 
         fetchData();
         registerBackgroundFetch();
-        const interval = setInterval(fetchData, 30000); 
+        const interval = setInterval(fetchData, 5000); 
         return () => clearInterval(interval); 
     }, [storageLevel]);
 
     const registerBackgroundFetch = async () => {
         try {
             await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-            minimumInterval: 60, 
+            minimumInterval: 1, 
             stopOnTerminate: false, 
             startOnBoot: true,
             });
@@ -138,54 +141,6 @@ export default function Dashboard() {
             console.error('Failed to register background fetch task:', error);
         }
     };
-
-    const formatDateTime = (dateString) => {
-        const options = {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        };
-      
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', options);
-    };
-
-    const addToHistory = async (newDate, newValue) => {
-        try {
-            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-            const docSnap = await getDoc(docRef);
-        
-            if (docSnap.exists()) {
-            const data = docSnap.data();
-            let history = data.history || []; // Ensure history exists or initialize as empty array
-        
-            // Find index of existing entry with the same date
-            const existingEntryIndex = history.findIndex(entry => entry.date === formatDateTime(newDate));
-        
-            if (existingEntryIndex !== -1) {
-                // Update existing entry if the new value is higher
-                if (newValue > history[existingEntryIndex].value) {
-                history[existingEntryIndex].value = newValue;
-                }
-            } else {
-                // Add new entry if no entry with the same date exists
-                history.push({ date: formatDateTime(newDate), value: newValue });
-            }
-        
-            // Update Firestore document with the modified history array
-            await updateDoc(docRef, { history });
-        
-            console.log('Added/Updated history entry:', { date: newDate, value: newValue });
-            } else {
-            console.log('Document does not exist!');
-            }
-        } catch (error) {
-            console.error('Error adding/updating history entry:', error);
-        }
-    };
-      
-      
-      
 
     const fetchData = async () => {
         try {
@@ -201,19 +156,28 @@ export default function Dashboard() {
                 setStorageLevel(pressureValue);
                 setData1(fetchEmissionData(methaneValue));
     
-                if (pressureValue >= 250) {
-                    sendNotification();
+                // // Calculate storageThreshold based on the difference from maximum capacity (5)
+                // const maxCapacity = 5;
+                // const newStorageThreshold = maxCapacity - pressureValue;
+                // setStorageThreshold(newStorageThreshold >= 0 ? newStorageThreshold : 0);
+    
+                if (pressureValue == 3) {
+                    sendNotification("The storage has reached its critical value.");
                 }
     
+                if (pressureValue == 5) {
+                    sendNotification("The storage has reached its maximum storage.");
+                    setStorageThreshold(0); // Set storageThreshold to 0 to fill the pie chart completely
+                }
+                
                 if (methaneValue >= 100) {
                     sendNotification2();
                 }
-
+    
                 // Add new entry to history
                 const currentDate = new Date().toISOString();
                 addToHistory(currentDate, methaneValue);
             
-    
                 console.log('Methane:', methaneValue);
                 console.log('Storage:', pressureValue);
             } else {
@@ -223,6 +187,8 @@ export default function Dashboard() {
             console.error('Error fetching document:', error);
         }
     };
+    
+    
     
 
     function generateInitialData() {
@@ -277,7 +243,6 @@ export default function Dashboard() {
             color: "#E45353",
             legendFontColor: "rgba(16, 39, 90, 1)",
             legendFontSize: 15
-
         },
     ];
 
@@ -304,26 +269,6 @@ export default function Dashboard() {
     };
     
 
-    const sendNotification = async () => {
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title: 'Storage Level Alert',
-                body: 'The storage level has reached 250.',
-            },
-            trigger: null,
-        });
-    };
-
-    const sendNotification2 = async () => {
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title: 'Methane Emission Level Alert',
-                body: 'The methane emission reached 100',
-            },
-            trigger: null,
-        });
-    };
-
     return (
         <View style={styles.container}>
             <View>
@@ -348,7 +293,7 @@ export default function Dashboard() {
                 absolute
                 center={[90,0]}
             />
-            <View style={styles.container2}>
+            {/* <View style={styles.container2}>
                 <View style={styles.textContainer}>
                     <View style={styles.circle1} /> 
                     <Text style={styles.text}>AMOUNT OF GAS: {storageLevel}</Text>
@@ -357,7 +302,7 @@ export default function Dashboard() {
                     <View style={styles.circle2} /> 
                     <Text style={styles.text}>CAPACITY: 250</Text>
                 </View>
-            </View>
+            </View> */}
         </View>
     );
 }
@@ -406,4 +351,3 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
 });
-
