@@ -21,8 +21,10 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 
                 if (pressureValue <= 3) {
                     sendNotification("The storage has reached its critical value.");
+                    // setRealValue("CRITICAL VALUE")
                 } else if (5 >= pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
+                    // setRealValue(0);
                 }
 
                 // if (methaneValue >= 100) {
@@ -116,25 +118,55 @@ export default function Dashboard() {
     const [emissionLevel, setEmissionLevel] = useState(0);
     const [storageLevel, setStorageLevel] = useState(0);
     const [storageThreshold, setStorageThreshold] = useState(0)
+    const [percentValue, setPercentValue] = useState(0)
     const [realValue, setRealValue] = useState(0)
     const [data1, setData1] = useState(generateInitialData());
 
     useEffect(() => {
-        // setStorageThreshold(() => {
-        //     const threshold = 40 - realValue;
-        //     return threshold >= 0 ? threshold : 0;
-        // });
+        setStorageThreshold(() => {
+            const threshold = 30 - realValue;
+            return threshold >= 0 ? threshold : 0;
+        });
 
         setRealValue(() => {
-            const realValue = Math.max(0, 33.78 - storageLevel);
+            const realValue = Math.max(0, 30 - storageLevel);
             return realValue;
         });
 
-        const pressureUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
+        setPercentValue(() => {
+            const percentage = (realValue / 30) * 100;
+            return parseFloat(percentage.toFixed(2)) + "%";
+        });
+
+        // const pressureUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
+        //     if (doc.exists()) {
+        //         const data = doc.data();
+        //         const pressureValue = data.pressure;
+        //         setStorageLevel(pressureValue); // Update pressure value on Firestore changes
+
+        //         if (pressureValue <= 3) {
+        //             sendNotification("The storage has reached its critical value.");
+        //             setRealValue("CRITICAL VALUE")
+        //         } else if (5 >= pressureValue && 4 <= pressureValue) {
+        //             sendNotification("The storage has reached its maximum storage.");
+        //             setRealValue(0);
+        //         }
+        //     } else {
+        //         console.log('Document does not exist!');
+        //     }
+        // });
+
+        const methaneUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
-                const pressureValue = data.pressure;
-                setStorageLevel(pressureValue); // Update pressure value on Firestore changes
+                const methaneValue = data.methane;
+
+                if(methaneValue > emissionLevel){
+                    const currentDate = new Date().toISOString();
+                    addToHistory(currentDate, methaneValue);
+                }
+            
+                
             } else {
                 console.log('Document does not exist!');
             }
@@ -143,16 +175,19 @@ export default function Dashboard() {
         fetchData();
         registerBackgroundFetch();
         const interval = setInterval(fetchData, 15000);
+        const interval2 = setInterval(fetchStorage, 1000)
         return () => {
             clearInterval(interval);
-            pressureUnsubscribe();
+            clearInterval(interval2)
+            methaneUnsubscribe();
+            // pressureUnsubscribe();
         };
-    }, [storageLevel]);
+    }, [storageLevel, realValue, emissionLevel]);
 
     const registerBackgroundFetch = async () => {
         try {
             await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-            minimumInterval: 1, 
+            minimumInterval: 10, 
             stopOnTerminate: false, 
             startOnBoot: true,
             });
@@ -160,6 +195,33 @@ export default function Dashboard() {
             console.error('Failed to register background fetch task:', error);
         }
     };
+
+    const fetchStorage = async () => {
+        try{
+            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const pressureValue = data.pressure;
+                setStorageLevel(pressureValue); // Update pressure value on Firestore changes
+
+                if (pressureValue < 4) {
+                    sendNotification("The storage has reached its critical value.");
+                    setRealValue("CRITICAL VALUE")
+                    setStorageThreshold(0);
+                } else if (6 > pressureValue && 4 <= pressureValue) {
+                    sendNotification("The storage has reached its maximum storage.");
+                    setStorageThreshold(0);
+                    setPercentValue("MAXIMUM STORAGE")
+                }
+            } else {
+                console.log('Document does not exist!');
+            }
+        } catch (error) {
+            console.error('Error fetching document:', error);
+        }
+
+    }
 
     const fetchData = async () => {
         try {
@@ -180,11 +242,14 @@ export default function Dashboard() {
                 // const newStorageThreshold = maxCapacity - pressureValue;
                 // setStorageThreshold(newStorageThreshold >= 0 ? newStorageThreshold : 0);
     
-                if (pressureValue <= 3) {
+                if (pressureValue < 4) {
                     sendNotification("The storage has reached its critical value.");
+                    setPercentValue("CRITICAL VALUE")
                 } else if (5 >= pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
-                }  setStorageThreshold(0); // Set storageThreshold to 0 to fill the pie chart completely
+                    setStorageThreshold(0);
+                    setPercentValue("MAXIMUM STORAGE")
+                }
         
                 
                 if (methaneValue >= 100) {
@@ -192,8 +257,10 @@ export default function Dashboard() {
                 }
     
                 // Add new entry to history
-                const currentDate = new Date().toISOString();
-                addToHistory(currentDate, methaneValue);
+                if(methaneValue > emissionLevel){
+                    const currentDate = new Date().toISOString();
+                    addToHistory(currentDate, methaneValue);
+                }
             
                 console.log('Methane:', methaneValue);
                 console.log('Storage:', pressureValue);
@@ -205,46 +272,55 @@ export default function Dashboard() {
         }
     };
     
-    
-    
 
+    function formatTimeWithoutAmPm(date) {
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
+        const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
+        return `${formattedHours}:${formattedMinutes}`;
+    }
+    
     function generateInitialData() {
-      const labels = Array.from({ length: 7 }, (_, i) => {
-          const date = new Date();
-          date.setMinutes(date.getMinutes() - (6 - i)); 
-          return `${date.getHours()}:${date.getMinutes()}`;
-      });
-  
-      const initialData = [0, 0, 0, 0, 0, 0, 0]; 
-  
-      return {
-          labels,
-          datasets: [
-              {
-                  data: initialData,
-                  color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
-                  strokeWidth: 2,
-              },
-          ],
-      };
+        const labels = Array.from({ length: 7 }, (_, i) => {
+            const date = new Date();
+            date.setMinutes(date.getMinutes() - (6 - i)); 
+            return formatTimeWithoutAmPm(date);
+        });
+    
+        const initialData = [0, 0, 0, 0, 0, 0, 0]; 
+    
+        return {
+            labels,
+            datasets: [
+                {
+                    data: initialData,
+                    color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
+                    strokeWidth: 2,
+                },
+            ],
+        };
     }
-
+    
     function fetchEmissionData(emissionValue) {
-      const date = new Date();
-      const label = `${date.getHours()}:${date.getMinutes()}`;
-      
-      const newData = { ...data1 };
-
-      newData.labels.shift();
-      newData.datasets[0].data.shift();
-
-      newData.labels.push(label);
-      newData.datasets[0].data.push(emissionValue);
-
-      console.log("New Data:", newData); 
-
-      return newData;
+        const date = new Date();
+        const label = formatTimeWithoutAmPm(date);
+        
+        const newData = { ...data1 };
+    
+        newData.labels.shift();
+        newData.datasets[0].data.shift();
+    
+        newData.labels.push(label);
+        newData.datasets[0].data.push(emissionValue);
+    
+        console.log("New Data:", newData); 
+    
+        return newData;
     }
+    
+    
 
     const data2 = [
         {
@@ -256,7 +332,7 @@ export default function Dashboard() {
         },
         {
             name: "CAPACITY",
-            population: 33.78 - realValue,
+            population: storageThreshold,
             color: "#E45353",
             legendFontColor: "rgba(16, 39, 90, 1)",
             legendFontSize: 15
@@ -298,7 +374,7 @@ export default function Dashboard() {
                     style={styles.chart}
                 />
             </View>
-            <Text style={styles.text}>Storage Level: {storageLevel}</Text>
+            <Text style={styles.text}>Storage Level: {percentValue}</Text>
             <PieChart
                 data={data2}
                 width={350}
