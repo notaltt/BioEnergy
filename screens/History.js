@@ -49,6 +49,7 @@ export default function History() {
                     <View style={styles.item}>
                         <Text>Date: {item.date}</Text>
                         <Text>Value: {item.value}</Text>
+                        <Text>Average: {item.average}</Text>
                     </View>
                 )}
                 keyExtractor={(item, index) => index.toString()}

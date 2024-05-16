@@ -3,7 +3,7 @@ import { Text, TouchableOpacity } from 'react-native';
 import { StyleSheet, View } from "react-native";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import { firestore as db } from "../firebase";
-import { getDoc, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { getDoc, doc, onSnapshot, updateDoc, average } from "firebase/firestore";
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -12,26 +12,27 @@ const BACKGROUND_FETCH_TASK = 'background-fetch-task';
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
-            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-            const docSnap = await getDoc(docRef);
+        const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+        
+        // Listen for changes to the Firestore document
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const pressureValue = data.pressure;
-                // setStorageLevel(pressureValue); // Update pressure value on Firestore changes
 
                 if (pressureValue < 4) {
                     sendNotification("The storage has reached its critical value.");
-                    // setRealValue("CRITICAL VALUE")
-                    // setStorageThreshold(0);
                 } else if (6 > pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
-                    // setStorageThreshold(0);
-                    // setPercentValue("MAXIMUM STORAGE")
                 }
-                console.log("BACKGROUND")
+                console.log("BACKGROUND");
             } else {
                 console.log('Document does not exist!');
             }
+        });
+
+        // Return a function to unsubscribe from the snapshot listener
+        return () => unsubscribe();
     } catch (error) {
         console.error('Error fetching document:', error);
         return BackgroundFetch.Result.Failed;
@@ -39,7 +40,8 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 });
 
 
-  const sendNotification = async (message) => {
+
+const sendNotification = async (message) => {
     await Notifications.scheduleNotificationAsync({
         content: {
             title: 'Storage Level Alert',
@@ -68,6 +70,7 @@ export default function Dashboard() {
     const [realValue, setRealValue] = useState(0)
     const [data1, setData1] = useState(generateInitialData());
     const [displayMethane, setDisplayMethane] = useState(0)
+    let isAddingHistory = false;
 
     useEffect(() => {
         setStorageThreshold(() => {
@@ -103,19 +106,26 @@ export default function Dashboard() {
         //     }
         // });
 
+        const methaneValues = [];
+
         const methaneUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
                 const methaneValue = data.methane;
-
-                setDisplayMethane(methaneValue)
-
-                if(methaneValue > emissionLevel){
+        
+                setDisplayMethane(methaneValue);
+        
+                // Save methane value to array
+                methaneValues.push(methaneValue);
+        
+                // Calculate average
+                const average = calculateAverage(methaneValues);
+        
+                // Check if methane value exceeds emission level
+                if (methaneValue > emissionLevel) {
                     const currentDate = new Date().toISOString();
-                    addToHistory(currentDate, methaneValue);
+                    addToHistory(currentDate, methaneValue, average);
                 }
-            
-                
             } else {
                 console.log('Document does not exist!');
             }
@@ -133,12 +143,17 @@ export default function Dashboard() {
         };
     }, [storageLevel, realValue, emissionLevel]);
 
+    function calculateAverage(values) {
+        const sum = values.reduce((acc, val) => acc + val, 0);
+        return sum / values.length;
+    }
+
     const registerBackgroundFetch = async () => {
         try {
             await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-            minimumInterval: 1, 
-            stopOnTerminate: false, 
-            startOnBoot: true,
+                minimumInterval: 5, 
+                stopOnTerminate: false, 
+                startOnBoot: true,
             });
         } catch (error) {
             console.error('Failed to register background fetch task:', error);
@@ -156,7 +171,9 @@ export default function Dashboard() {
         return date.toLocaleDateString('en-US', options);
     };
     
-    const addToHistory = async (newDate, newValue, lowestValue) => {
+    const addToHistory = async (newDate, newValue, average) => {
+        if (isAddingHistory) return; // Ignore if already adding history
+        isAddingHistory = true;
         try {
             const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
             const docSnap = await getDoc(docRef);
@@ -172,10 +189,11 @@ export default function Dashboard() {
                 // Update existing entry if the new value is higher
                 if (newValue > history[existingEntryIndex].value) {
                     history[existingEntryIndex].value = newValue;
+                    history[existingEntryIndex].average = average;
                 }
             } else {
                 // Add new entry if no entry with the same date exists
-                history.push({ date: formatDateTime(newDate), value: newValue });
+                history.push({ date: formatDateTime(newDate), value: newValue, average:  average});
                 // history.push({ date: "May 15, 2024 06:32 PM", value: 29.32     });
             }
         
@@ -183,13 +201,18 @@ export default function Dashboard() {
             await updateDoc(docRef, { history });
         
             console.log('Added/Updated history entry:', { date: newDate, value: newValue });
+
+            setTimeout(() => {
+                isAddingHistory = false;
+            }, 5000); // 5000 milliseconds = 5 seconds
             } else {
             console.log('Document does not exist!');
             }
         } catch (error) {
             console.error('Error adding/updating history entry:', error);
         }
-    };
+    }
+    
 
     const fetchStorage = async () => {
         try{
