@@ -18,6 +18,7 @@ export default function History() {
                         const formattedHistory = historyArray.map(item => ({
                             date: item.date,
                             value: item.value,
+                            average: item.average,
                         }));
 
                         setHistoryData(formattedHistory);

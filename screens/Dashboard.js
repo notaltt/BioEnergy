@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Text } from 'react-native';
+import { Text, TouchableOpacity } from 'react-native';
 import { StyleSheet, View } from "react-native";
 import { LineChart, PieChart } from "react-native-chart-kit";
 import { firestore as db } from "../firebase";
@@ -12,36 +12,26 @@ const BACKGROUND_FETCH_TASK = 'background-fetch-task';
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
-        const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+            const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const methaneValue = data.methane;
                 const pressureValue = data.pressure;
+                // setStorageLevel(pressureValue); // Update pressure value on Firestore changes
 
-                if (pressureValue <= 3) {
+                if (pressureValue < 4) {
                     sendNotification("The storage has reached its critical value.");
                     // setRealValue("CRITICAL VALUE")
-                } else if (5 >= pressureValue && 4 <= pressureValue) {
+                    // setStorageThreshold(0);
+                } else if (6 > pressureValue && 4 <= pressureValue) {
                     sendNotification("The storage has reached its maximum storage.");
-                    // setRealValue(0);
+                    // setStorageThreshold(0);
+                    // setPercentValue("MAXIMUM STORAGE")
                 }
-
-                // if (methaneValue >= 100) {
-                //     sendNotification2();
-                // }
-
-                console.log('background Methane:', methaneValue);
-                console.log('background Storage:', pressureValue);
-
-                // const currentDate = new Date().toISOString();
-                // addToHistory(currentDate, methaneValue);
+                console.log("BACKGROUND")
             } else {
                 console.log('Document does not exist!');
             }
-        });
-
-        return unsubscribe;
     } catch (error) {
         console.error('Error fetching document:', error);
         return BackgroundFetch.Result.Failed;
@@ -59,60 +49,16 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     });
 };
 
-const sendNotification2 = async () => {
-    await Notifications.scheduleNotificationAsync({
-        content: {
-            title: 'Methane Emission Level Alert',
-            body: 'The methane emission reached 100',
-        },
-        trigger: null, 
-    });
-};
+// const sendNotification2 = async () => {
+//     await Notifications.scheduleNotificationAsync({
+//         content: {
+//             title: 'Methane Emission Level Alert',
+//             body: 'The methane emission reached 100',
+//         },
+//         trigger: null, 
+//     });
+// };
 
-const formatDateTime = (dateString) => {
-    const options = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    };
-  
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', options);
-};
-
-const addToHistory = async (newDate, newValue) => {
-    try {
-        const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
-        const docSnap = await getDoc(docRef);
-    
-        if (docSnap.exists()) {
-        const data = docSnap.data();
-        let history = data.history || []; // Ensure history exists or initialize as empty array
-    
-        // Find index of existing entry with the same date
-        const existingEntryIndex = history.findIndex(entry => entry.date === formatDateTime(newDate));
-    
-        if (existingEntryIndex !== -1) {
-            // Update existing entry if the new value is higher
-            if (newValue > history[existingEntryIndex].value) {
-            history[existingEntryIndex].value = newValue;
-            }
-        } else {
-            // Add new entry if no entry with the same date exists
-            history.push({ date: formatDateTime(newDate), value: newValue });
-        }
-    
-        // Update Firestore document with the modified history array
-        await updateDoc(docRef, { history });
-    
-        console.log('Added/Updated history entry:', { date: newDate, value: newValue });
-        } else {
-        console.log('Document does not exist!');
-        }
-    } catch (error) {
-        console.error('Error adding/updating history entry:', error);
-    }
-};
 
 export default function Dashboard() {
     const [emissionLevel, setEmissionLevel] = useState(0);
@@ -121,6 +67,7 @@ export default function Dashboard() {
     const [percentValue, setPercentValue] = useState(0)
     const [realValue, setRealValue] = useState(0)
     const [data1, setData1] = useState(generateInitialData());
+    const [displayMethane, setDisplayMethane] = useState(0)
 
     useEffect(() => {
         setStorageThreshold(() => {
@@ -135,7 +82,7 @@ export default function Dashboard() {
 
         setPercentValue(() => {
             const percentage = (realValue / 30) * 100;
-            return parseFloat(percentage.toFixed(2)) + "%";
+            return parseFloat(percentage.toFixed(1)) + "%";
         });
 
         // const pressureUnsubscribe = onSnapshot(doc(db, 'System', 'lscUT1TfkWiQ87fisxwX'), (doc) => {
@@ -161,6 +108,8 @@ export default function Dashboard() {
                 const data = doc.data();
                 const methaneValue = data.methane;
 
+                setDisplayMethane(methaneValue)
+
                 if(methaneValue > emissionLevel){
                     const currentDate = new Date().toISOString();
                     addToHistory(currentDate, methaneValue);
@@ -172,9 +121,9 @@ export default function Dashboard() {
             }
         });
     
-        fetchData();
+        // fetchData();
         registerBackgroundFetch();
-        const interval = setInterval(fetchData, 15000);
+        const interval = setInterval(fetchData, 10000);
         const interval2 = setInterval(fetchStorage, 1000)
         return () => {
             clearInterval(interval);
@@ -187,12 +136,58 @@ export default function Dashboard() {
     const registerBackgroundFetch = async () => {
         try {
             await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-            minimumInterval: 10, 
+            minimumInterval: 1, 
             stopOnTerminate: false, 
             startOnBoot: true,
             });
         } catch (error) {
             console.error('Failed to register background fetch task:', error);
+        }
+    };
+
+    const formatDateTime = (dateString) => {
+        const options = {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        };
+      
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', options);
+    };
+    
+    const addToHistory = async (newDate, newValue, lowestValue) => {
+        try {
+            const docRef = doc(db, 'System', 'lscUT1TfkWiQ87fisxwX');
+            const docSnap = await getDoc(docRef);
+        
+            if (docSnap.exists()) {
+            const data = docSnap.data();
+            let history = data.history || []; // Ensure history exists or initialize as empty array
+        
+            // Find index of existing entry with the same date
+            const existingEntryIndex = history.findIndex(entry => entry.date === formatDateTime(newDate));
+        
+            if (existingEntryIndex !== -1) {
+                // Update existing entry if the new value is higher
+                if (newValue > history[existingEntryIndex].value) {
+                    history[existingEntryIndex].value = newValue;
+                }
+            } else {
+                // Add new entry if no entry with the same date exists
+                history.push({ date: formatDateTime(newDate), value: newValue });
+                // history.push({ date: "May 15, 2024 06:32 PM", value: 29.32     });
+            }
+        
+            // Update Firestore document with the modified history array
+            await updateDoc(docRef, { history });
+        
+            console.log('Added/Updated history entry:', { date: newDate, value: newValue });
+            } else {
+            console.log('Document does not exist!');
+            }
+        } catch (error) {
+            console.error('Error adding/updating history entry:', error);
         }
     };
 
@@ -206,14 +201,19 @@ export default function Dashboard() {
                 setStorageLevel(pressureValue); // Update pressure value on Firestore changes
 
                 if (pressureValue < 4) {
-                    sendNotification("The storage has reached its critical value.");
-                    setRealValue("CRITICAL VALUE")
+                    // sendNotification("The storage has reached its critical value.");
                     setStorageThreshold(0);
+                    setPercentValue("CRITICAL VALUE");
                 } else if (6 > pressureValue && 4 <= pressureValue) {
-                    sendNotification("The storage has reached its maximum storage.");
+                    // sendNotification("The storage has reached its maximum storage.");
                     setStorageThreshold(0);
-                    setPercentValue("MAXIMUM STORAGE")
+                    setPercentValue("MAXIMUM STORAGE");
                 }
+
+                // if (6 > pressureValue && 4 <= pressureValue) {
+                //     setStorageThreshold(0);
+                //     setPercentValue("MAXIMUM STORAGE")
+                // }
             } else {
                 console.log('Document does not exist!');
             }
@@ -242,25 +242,25 @@ export default function Dashboard() {
                 // const newStorageThreshold = maxCapacity - pressureValue;
                 // setStorageThreshold(newStorageThreshold >= 0 ? newStorageThreshold : 0);
     
-                if (pressureValue < 4) {
-                    sendNotification("The storage has reached its critical value.");
-                    setPercentValue("CRITICAL VALUE")
-                } else if (5 >= pressureValue && 4 <= pressureValue) {
-                    sendNotification("The storage has reached its maximum storage.");
-                    setStorageThreshold(0);
-                    setPercentValue("MAXIMUM STORAGE")
-                }
+                // if (pressureValue < 4) {
+                //     sendNotification("The storage has reached its critical value.");
+                //     setPercentValue("CRITICAL VALUE")
+                // } else if (5 >= pressureValue && 4 <= pressureValue) {
+                //     sendNotification("The storage has reached its maximum storage.");
+                //     setStorageThreshold(0);
+                //     setPercentValue("MAXIMUM STORAGE")
+                // }
         
                 
-                if (methaneValue >= 100) {
-                    sendNotification2();
-                }
+                // if (methaneValue >= 100) {
+                //     sendNotification2();
+                // }
     
-                // Add new entry to history
-                if(methaneValue > emissionLevel){
-                    const currentDate = new Date().toISOString();
-                    addToHistory(currentDate, methaneValue);
-                }
+                // // Add new entry to history
+                // if(methaneValue > emissionLevel){
+                //     const currentDate = new Date().toISOString();
+                //     addToHistory(currentDate, methaneValue);
+                // }
             
                 console.log('Methane:', methaneValue);
                 console.log('Storage:', pressureValue);
@@ -268,7 +268,7 @@ export default function Dashboard() {
                 console.log('Document does not exist!');
             }
         } catch (error) {
-            console.error('Error fetching document:', error);
+            console.error('Error fetching document: aa', error);
         }
     };
     
@@ -364,8 +364,11 @@ export default function Dashboard() {
 
     return (
         <View style={styles.container}>
+            {/* <TouchableOpacity onPress={addToHistory}>
+                <Text>ADD</Text>
+            </TouchableOpacity> */}
             <View>
-                <Text style={styles.text}>Current Methane Emission Lvl: {emissionLevel}</Text>
+                <Text style={styles.text}>Current Methane Emission Lvl: {displayMethane}</Text>
                 <LineChart
                     data={data1}
                     width={350}
