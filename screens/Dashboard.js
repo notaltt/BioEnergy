@@ -40,7 +40,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 });
 
 
-
 const sendNotification = async (message) => {
     await Notifications.scheduleNotificationAsync({
         content: {

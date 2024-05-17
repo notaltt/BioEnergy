@@ -16,14 +16,19 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "backgroundModes": ["fetch"] 
+      "backgroundModes": [
+        "fetch"
+      ]
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["ACCESS_BACKGROUND_LOCATION"]
+      "permissions": [
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "package": "com.notalt.MethaneProject"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +44,11 @@
           }
         }
       ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8047ba0f-60e0-4d4d-86a3-c59c4699a22b"
+      }
     }
   }
 }
